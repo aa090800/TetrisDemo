@@ -8,11 +8,15 @@ using UnityEngine;
 //最上方不能旋轉 V
 //撞牆不會退格 V
 //I和O的中心位置修正 V
-//失敗條件
+//失敗條件V
 
 //手感部分:
-//按下落到最下方時 長一點點重計時 自然落下時短一點點重計時
+//按下落到最下方時 長一點點重計時 自然落下時短一點點重計時V
 //暗助左右移動速度調整
+
+//bug:
+//下方不會退格
+//
 
 //
 //代新增:
@@ -25,7 +29,7 @@ using UnityEngine;
 //分數
 //combo
 //難度隨消的次數增加便難(可選)
-//介面
+//介面 A
 
 
 //
@@ -40,7 +44,7 @@ public class CellCtrl : MonoBehaviour
     public GridManager grid;
     GameState nowState;
 
-    public float fallingSpeed=0.05f;
+    public float fallingSpeed;
     ShapePiece now_Shape;
     Dictionary<Vector2Int, GameObject> piecesDictionary = new Dictionary<Vector2Int, GameObject>();
     gameManager game;
@@ -84,6 +88,7 @@ public class CellCtrl : MonoBehaviour
 
 
         if (nowState != GameState.Playing) return;
+        EndlessTimeChecker();
         CellMove();
         TryPiecesMove();
         if (Input.GetKeyDown(KeyCode.Space))//直接下墜到底
@@ -101,27 +106,66 @@ public class CellCtrl : MonoBehaviour
             TryPieceHold();
         }
     }
+    void EndlessTimeChecker()
+    {
+        if (isCellMoveToBottom)
+        {
+            endlessFallingTimer += Time.deltaTime;
+            if (endlessFallingTimer < 1) return;
+            DropStrightly();
+            endlessFallingTimer = 0;
+        }
+    }
     bool isMoving;
     float movingTimer;
     void CellMove()
     {
-        movingTimer += Time.deltaTime;
-        if (movingTimer < 1 / fallingSpeed) return;
-        movingTimer = 0;
+        if (!isCellMoveToBottom)//正常下墜
+        {
+            movingTimer += Time.deltaTime;
+            if (movingTimer < 1 / fallingSpeed) return;
+            movingTimer = 0;
+            naturalFall = true;
+        }
+        else//到底
+        {
+            movingTimer += Time.deltaTime;
+            if (movingTimer < finalCellMoveTimer) return;
+            movingTimer = 0;
+        }
 
         PiecesMove(Vector2Int.down);
     }
 
+    void FinalCellMove()
+    {
+
+    }
+
     bool ReadyToSpawnPiece = true;
-    
+
 
     //=================移動==================
+    //最後一格 -> 自然下墜來的0.5秒/手動下來的0.8秒 移動過後重計0.5秒 -> 移走變成正常下墜 -> 但避免卡無限時間 碰過底有1秒可以扣 
+
+    bool naturalFall;
+    bool downFall;
+    bool isCellMoveToBottom;
+    float finalCellMoveTimer = 0;
+    float endlessFallingTimer = 0;
+
+
     List<Vector2Int> NextPlace = new List<Vector2Int>();
     void PiecesMove(Vector2Int dir)
     {
         
-
         if (!isMoving) return;
+        if (isCellMoveToBottom && (dir == Vector2Int.left || dir == Vector2Int.right))
+        {
+            movingTimer = 0;
+            finalCellMoveTimer = 0.8f;
+        }
+        if (isCellMoveToBottom && dir == Vector2Int.down) return;
             //檢查左右不能超出 之後檢查最底是不是超界或形狀撞到方塊
             NextPlace.Clear();
         for (int i = 0; i < MovingPiecesObj.Count; i++)//判斷其中一片下一格出界
@@ -147,11 +191,34 @@ public class CellCtrl : MonoBehaviour
 
         if (canmove)
         { //通過才移動
+            
             centerPos += dir;
             for (int i = 0; i < MovingPiecesObj.Count; i++)
             {
                 Vector2Int cellgridPos = centerPos + MovingPiecesOffset[i];
                 MovingPiecesObj[i].transform.position = grid.GridToWorldPos(cellgridPos);
+            }
+            //到底時秒數更變
+            if (naturalFall || downFall)
+            {
+                List<Vector2Int> tempPos = new List<Vector2Int>();
+
+                for (int i = 0; i < MovingPiecesObj.Count; i++)
+                {
+                    tempPos.Add(centerPos + MovingPiecesOffset[i] + Vector2Int.down);
+                    if (!grid.IsCellEmpty(tempPos[i]))
+                    {
+                        if (naturalFall) finalCellMoveTimer = 0.5f;
+                        else finalCellMoveTimer = 0.8f;
+                        isCellMoveToBottom = true;
+                        break;//最底了
+                    }
+                }
+            }
+            else
+            {
+                isCellMoveToBottom = false;
+                movingTimer = 0;
             }
 
         }
@@ -225,6 +292,7 @@ public class CellCtrl : MonoBehaviour
         }
         
         isMoving = false;
+        isCellMoveToBottom = false;
         MovingPiecesObj.Clear();
         MovingPiecesOffset.Clear();
         centerPos = StartCenterPos;
@@ -244,7 +312,11 @@ public class CellCtrl : MonoBehaviour
             Vector2Int dir = Vector2Int.zero;
             if (Input.GetKeyDown(KeyCode.RightArrow)) dir = Vector2Int.right;
             if (Input.GetKeyDown(KeyCode.LeftArrow)) dir = Vector2Int.left;
-            if (Input.GetKeyDown(KeyCode.DownArrow)) dir = Vector2Int.down;
+            if (Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                downFall = true;
+                dir = Vector2Int.down;
+            }
             inputTimer = 0;
             PiecesMove(dir);
         }
@@ -254,7 +326,11 @@ public class CellCtrl : MonoBehaviour
             Vector2Int dir = Vector2Int.zero;
             if (Input.GetKey(KeyCode.RightArrow)) dir = Vector2Int.right;
             if (Input.GetKey(KeyCode.LeftArrow)) dir = Vector2Int.left;
-            if (Input.GetKey(KeyCode.DownArrow)) dir = Vector2Int.down;
+            if (Input.GetKey(KeyCode.DownArrow))
+            {
+                downFall = true;
+                dir = Vector2Int.down;
+            }
             inputTimer += Time.deltaTime;
             if (inputTimer < 0.2f) return;
             inputTimer -= 0.05f;
@@ -267,7 +343,6 @@ public class CellCtrl : MonoBehaviour
     List<Vector2Int> MovingPiecesOffset = new List<Vector2Int>();
     void SpawnPiece(int num)//抓bag 取出的數字當作形狀生成方塊
     {
-
         
 
         //先隨機0~6圖案 之後再改queue
@@ -285,7 +360,7 @@ public class CellCtrl : MonoBehaviour
             MovingPiecesOffset.Add(pos);
 
         }
-
+        isCellMoveToBottom = false;
         rotationIndex = 0;
         ReadyToSpawnPiece = false;
         isMoving = true;
@@ -353,6 +428,7 @@ public class CellCtrl : MonoBehaviour
 
                     SpriteRenderer sr= go.GetComponent<SpriteRenderer>();
                     sr.color = new Color(0.5f,0.5f,0.5f,0.5f);
+                    sr.sortingOrder = -1;
                 }
                 break;
             }
@@ -364,7 +440,7 @@ public class CellCtrl : MonoBehaviour
     //================失敗判定===================
     void TryGameOver()
     {
-        Debug.Log("test");
+        //Debug.Log("test");
         for(int i = 0; i < MovingPiecesObj.Count; i++)
         {
             Vector2Int pos = centerPos + MovingPiecesOffset[i];
@@ -477,7 +553,7 @@ public class CellCtrl : MonoBehaviour
             if (now_Shape == ShapePiece.I_shape) centerPos += I_ShapeCenterOffset[rotationIndex];
             if (now_Shape == ShapePiece.O_shape)
             {
-                ShowNextPieceSprite();
+                //ShowNextPieceSprite();
                 return;
             }
 
@@ -500,7 +576,13 @@ public class CellCtrl : MonoBehaviour
                 }
                 if (tryTrunPos.y < centerPos.y)
                 {
-                    centerPos += new Vector2Int(0, -1);
+                    centerPos += new Vector2Int(0, 1);
+
+                    
+
+                    isCellMoveToBottom = false;
+                    movingTimer = 0;
+                    finalCellMoveTimer = 0.8f;
                 }
                 canTurn = false;
                 rotateTwice = true;
@@ -530,8 +612,10 @@ public class CellCtrl : MonoBehaviour
             rotationIndex++;
             if (rotationIndex > 3) rotationIndex = 0;
         }
+        Debug.Log(isCellMoveToBottom);
         PredictFallingPiece();
-        ShowNextPieceSprite();
+
+        //ShowNextPieceSprite();
     }
         
 
