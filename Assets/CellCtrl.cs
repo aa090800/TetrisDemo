@@ -3,36 +3,38 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-//note
-//帶修正:
-//最上方不能旋轉 V
-//撞牆不會退格 V
-//I和O的中心位置修正 V
-//失敗條件V
+/*
+ * 
+note:
+帶修正:
+最上方不能旋轉 V
+撞牆不會退格 V
+I和O的中心位置修正 V
+失敗條件 V
 
-//手感部分:
-//按下落到最下方時 長一點點重計時 自然落下時短一點點重計時V
-//暗助左右移動速度調整
+手感部分:
+按下落到最下方時 長一點點重計時 自然落下時短一點點重計時 V
+暗助左右移動速度調整
 
-//bug:
-//下方不會退格
-//
-
-//
-//代新增:
-//按下加速V
-//案左右加速V
-//落下預判點V
-//消行V
-//hold方塊V
-//預顯示下一個方塊V
-//分數
-//combo
-//難度隨消的次數增加便難(可選)
-//介面 A
+bug:
+方塊在下方不會退格 V
 
 
-//
+
+代新增:
+按下加速 V
+案左右加速 V
+落下預判點 V
+消行 V
+hold方塊 V
+預顯示下一個方塊 V
+分數
+combo
+難度隨消的次數增加便難(可選)
+介面 A
+
+
+*/
 
 
 
@@ -41,38 +43,75 @@ enum GameState { Title, Playing, Pause, GameOver }
 
 public class CellCtrl : MonoBehaviour
 {
+
+    [Header("Manager")]
     public GridManager grid;
-    GameState nowState;
+    public gameManager game;
 
-    public float fallingSpeed;
-    ShapePiece now_Shape;
-    Dictionary<Vector2Int, GameObject> piecesDictionary = new Dictionary<Vector2Int, GameObject>();
-    gameManager game;
-
-    public void Init(GridManager grid)
-    {
-        this.grid = grid;
-    }
-
+    [Header("Prefab")]
     public GameObject CellPrefab;
 
+    //核心資料
+    GameState nowState;
+    Dictionary<Vector2Int, GameObject> piecesDictionary = new Dictionary<Vector2Int, GameObject>();
+    //遊戲狀態
     Vector2Int StartCenterPos;
     Vector2Int centerPos;
+    public float fallingSpeed;
 
+
+
+    //====方塊控制====
+    //移動
+    ShapePiece now_Shape;
+    List<Vector2Int> NextPlace = new List<Vector2Int>();
+    List<GameObject> MovingPiecesObj = new List<GameObject>();
+    List<Vector2Int> MovingPiecesOffset = new List<Vector2Int>();
+    bool isMoving;
+    float movingTimer;
+    bool readyToSpawnPiece = true;
     float inputTimer;
+
+    //預判落點
+    GameObject[] fallingPieces;
+
+
+
+    //管理觸底秒數
+    bool naturalFall;
+    bool downFall;
+    bool isCellMoveToBottom;
+    float finalCellMoveTimer = 0;
+    float endlessFallingTimer = 0;
+
+    //7-bag & hold方塊
+    List<int> sevenBag = new List<int>();
+    List<int> nextPieceList = new List<int>();//只有5個
+    bool pieceHolded;
+    bool firstHold;
+    int holdedNum = 0;
+
+    //旋轉
+    int rotationIndex = 0;
+    bool secondRotation = false;
+
+
+    //方塊生成形狀
+    List<Vector2Int> I_list, O_list, J_list, L_list, S_list, T_list, Z_list;
+    Dictionary<ShapePiece, List<Vector2Int>> shapesOffset;
+    
     private void Start()
     {
-        
-
         game = gameManager.instance;
+        //初始化畫面
         SetState_Title();
         SpawnWall();
         game.spriteCtrl.HoldedPieceInvincible();
-        SetShape();
-
+        //初始化起點
         StartCenterPos = new Vector2Int(5, 20);
         centerPos = StartCenterPos;
-
+        
+        SetShape();
         FillBag();
         SpawnPiece(GetBag());
         ShowNextPieceSprite();
@@ -106,6 +145,14 @@ public class CellCtrl : MonoBehaviour
             TryPieceHold();
         }
     }
+
+    public void Init(GridManager grid)
+    {
+        this.grid = grid;
+    }
+
+    #region ===========包裝方法============
+
     void EndlessTimeChecker()
     {
         if (isCellMoveToBottom)
@@ -116,8 +163,6 @@ public class CellCtrl : MonoBehaviour
             endlessFallingTimer = 0;
         }
     }
-    bool isMoving;
-    float movingTimer;
     void CellMove()
     {
         if (!isCellMoveToBottom)//正常下墜
@@ -137,28 +182,13 @@ public class CellCtrl : MonoBehaviour
         PiecesMove(Vector2Int.down);
     }
 
-    void FinalCellMove()
-    {
+    #endregion
 
-    }
-
-    bool ReadyToSpawnPiece = true;
-
-
-    //=================移動==================
+    #region=================移動==================
     //最後一格 -> 自然下墜來的0.5秒/手動下來的0.8秒 移動過後重計0.5秒 -> 移走變成正常下墜 -> 但避免卡無限時間 碰過底有1秒可以扣 
 
-    bool naturalFall;
-    bool downFall;
-    bool isCellMoveToBottom;
-    float finalCellMoveTimer = 0;
-    float endlessFallingTimer = 0;
-
-
-    List<Vector2Int> NextPlace = new List<Vector2Int>();
     void PiecesMove(Vector2Int dir)
     {
-        
         if (!isMoving) return;
         if (isCellMoveToBottom && (dir == Vector2Int.left || dir == Vector2Int.right))
         {
@@ -296,7 +326,7 @@ public class CellCtrl : MonoBehaviour
         MovingPiecesObj.Clear();
         MovingPiecesOffset.Clear();
         centerPos = StartCenterPos;
-        ReadyToSpawnPiece = true;
+        readyToSpawnPiece = true;
         firstHold = false;
 
         if(pieceHolded) game.spriteCtrl.HoldedPieceBecomeNormal();
@@ -337,10 +367,9 @@ public class CellCtrl : MonoBehaviour
             PiecesMove(dir);
         }
     }
+    #endregion
 
-    //====================生成方塊=====================
-    List<GameObject> MovingPiecesObj = new List<GameObject>();
-    List<Vector2Int> MovingPiecesOffset = new List<Vector2Int>();
+    #region====================生成方塊=====================
     void SpawnPiece(int num)//抓bag 取出的數字當作形狀生成方塊
     {
         
@@ -362,7 +391,7 @@ public class CellCtrl : MonoBehaviour
         }
         isCellMoveToBottom = false;
         rotationIndex = 0;
-        ReadyToSpawnPiece = false;
+        readyToSpawnPiece = false;
         isMoving = true;
 
         TryGameOver();
@@ -370,7 +399,6 @@ public class CellCtrl : MonoBehaviour
         PredictFallingPiece();
         ShowNextPieceSprite();
     }
-    List<int> nextPieceList = new List<int>();//只有5個
     void ShowNextPieceSprite()//顯示5個方塊圖示
     {
         List<int> tempList = new List<int>();
@@ -380,10 +408,11 @@ public class CellCtrl : MonoBehaviour
         }
         game.spriteCtrl.ShowNextPiece(tempList);
     }
-    //================預判落點==================
+    #endregion
+
+    #region================預判落點==================
     //抓現在的movingPieces
     //
-    GameObject[] fallingPieces;
     void PredictFallingPiece()
     {
         if (fallingPieces != null)
@@ -436,8 +465,9 @@ public class CellCtrl : MonoBehaviour
         
     }
 
+    #endregion
 
-    //================失敗判定===================
+    #region================失敗判定===================
     void TryGameOver()
     {
         //Debug.Log("test");
@@ -451,9 +481,9 @@ public class CellCtrl : MonoBehaviour
             }
         }
     }
+    #endregion
 
-    //=================7-Bag================
-    List<int> sevenBag = new List<int>();
+    #region=================7-Bag================
     void FillBag()
     {
         List<int> tempList = new List<int>();
@@ -491,10 +521,9 @@ public class CellCtrl : MonoBehaviour
         return num;
     }
 
-    //=============HOLD方塊================
-    bool pieceHolded;
-    bool firstHold;
-    int holdedNum=0;
+    #endregion
+
+    #region=============HOLD方塊================
     void TryPieceHold()
     {
         if (firstHold)return;
@@ -533,11 +562,10 @@ public class CellCtrl : MonoBehaviour
         centerPos = StartCenterPos;
     }
 
+    #endregion
 
-    //=============旋轉===============
+    #region=============旋轉===============
     //(x,y)->(y,-x)
-    int rotationIndex = 0;
-    bool rotateTwice = false;
     void TurnPieces()
     {
         if (!isMoving) return;
@@ -545,10 +573,10 @@ public class CellCtrl : MonoBehaviour
 
 
 
-        if (rotateTwice) rotationIndex--;
+        if (secondRotation) rotationIndex--;
         List<Vector2Int> TurnedGridPos = new List<Vector2Int>();
 
-        if (!rotateTwice)
+        if (!secondRotation)
         {
             if (now_Shape == ShapePiece.I_shape) centerPos += I_ShapeCenterOffset[rotationIndex];
             if (now_Shape == ShapePiece.O_shape)
@@ -585,7 +613,7 @@ public class CellCtrl : MonoBehaviour
                     finalCellMoveTimer = 0.8f;
                 }
                 canTurn = false;
-                rotateTwice = true;
+                secondRotation = true;
                 TurnPieces();
             }
             else
@@ -604,7 +632,7 @@ public class CellCtrl : MonoBehaviour
                 MovingPiecesObj[i].transform.position = grid.GridToWorldPos(cellgridPos);
             }
 
-            rotateTwice = false;
+            secondRotation = false;
         }
 
         if (now_Shape == ShapePiece.I_shape)
@@ -615,17 +643,17 @@ public class CellCtrl : MonoBehaviour
         Debug.Log(isCellMoveToBottom);
         PredictFallingPiece();
 
-        //ShowNextPieceSprite();
     }
-        
 
-    //===========消行============
+    #endregion
+
+    #region    ============消行============
     //y=0開始偵測 每個X都是CellState.Filled 滿足消行 刪除 ->可優化成piece形狀的最下面那行Y開始偵測
     //y+1以上所有方塊下墜1格 此處可加動畫
     //(0,1)->(9,1) list<gameobject> obj .add ->foreach obj 格子往下移一個gird.gridToWorld(Vector2Int.down)->grid.ChangeCellState(原點,下一點)
     //之後(1,1)->(9,1)以上也要跑一次剛剛的全部
     //再來從剛剛消行那個y +1往上偵測是否滿足消行 至下一個y行全部X都是0結束
-    
+
     void TryLineClear()
     {
         
@@ -692,8 +720,6 @@ public class CellCtrl : MonoBehaviour
     }
 
 
-    List<Vector2Int> I_list, O_list, J_list, L_list, S_list, T_list, Z_list;
-    Dictionary<ShapePiece, List<Vector2Int>> shapesOffset;
     void SetShape()
     {
         shapesOffset = new Dictionary<ShapePiece, List<Vector2Int>>();
@@ -758,7 +784,9 @@ public class CellCtrl : MonoBehaviour
         new Vector2Int(0,-1),new Vector2Int(-1,0),new Vector2Int(0,1),new Vector2Int(1,0)
     };
 
-    //=========ResetGame==========
+    #endregion
+
+    #region=========ResetGame==========
     public void ResetGame()
     {
         for(int x = 0; x < grid.Width; x++)
@@ -804,8 +832,9 @@ public class CellCtrl : MonoBehaviour
         game.ui.GameOver();
     }
 
+    #endregion
 
-    //========Button============
+    #region========Button============
     public void SetState_Playing()
     {
         nowState = GameState.Playing;   
@@ -826,4 +855,5 @@ public class CellCtrl : MonoBehaviour
         nowState = (nowState == GameState.Playing) ? GameState.Pause : GameState.Playing;
 
     }
+    #endregion
 }
