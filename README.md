@@ -1,5 +1,7 @@
 # Tetries-俄羅斯方塊
-經典遊戲「俄羅斯方塊」。
+經典遊戲「俄羅斯方塊」。  
+<img src="https://github.com/aa090800/TetrisDemo/blob/main/%E5%B0%81%E9%9D%A2.png" width="340">
+![alt](https://github.com/aa090800/TetrisDemo/blob/main/%E5%B1%95%E7%A4%BA.gif)  
 
 ## 遊戲玩法
 **移動：** ←→方向鍵  
