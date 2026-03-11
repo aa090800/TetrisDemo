@@ -412,10 +412,10 @@ public class CellCtrl : MonoBehaviour
 
     #region================預判落點==================
     //抓現在的movingPieces
-    //
+    //    
     void PredictFallingPiece()
     {
-        if (fallingPieces != null)
+        if (fallingPieces != null)//每次移動刪除預判格子 
         {
             foreach(var obj in fallingPieces)
             {
@@ -426,6 +426,7 @@ public class CellCtrl : MonoBehaviour
         Vector2Int tempCenterpos = centerPos;
         bool isBottom = false;
 
+        //邏輯: 中心點往下掉落1格 -> 判定是否到底 -> (是)生成預判方塊 (否)繼續往下+1判定
         while (true)
         {
             List<Vector2Int> nextPos = new List<Vector2Int>();
@@ -439,7 +440,6 @@ public class CellCtrl : MonoBehaviour
                     break;
                 }
             }
-
             if (!isBottom)
             {
                 tempCenterpos += Vector2Int.down;
@@ -461,8 +461,7 @@ public class CellCtrl : MonoBehaviour
                 }
                 break;
             }
-        }
-        
+        }        
     }
 
     #endregion
@@ -571,43 +570,33 @@ public class CellCtrl : MonoBehaviour
         if (!isMoving) return;
         bool canTurn = true;
 
-
-
         if (secondRotation) rotationIndex--;
         List<Vector2Int> TurnedGridPos = new List<Vector2Int>();
 
         if (!secondRotation)
         {
             if (now_Shape == ShapePiece.I_shape) centerPos += I_ShapeCenterOffset[rotationIndex];
-            if (now_Shape == ShapePiece.O_shape)
-            {
-                //ShowNextPieceSprite();
-                return;
-            }
-
+            if (now_Shape == ShapePiece.O_shape) return;
         }
-
 
         foreach (var pos in MovingPiecesOffset)
         {
-
             Vector2Int newPos = new Vector2Int(pos.y, -pos.x);
             Vector2Int tryTrunPos = newPos + centerPos;
 
-            //撞牆判定 退位
+            //判定是否撞牆或超出格子 -> 退位
             if (!grid.IsInside(tryTrunPos) || !grid.IsCellEmpty(tryTrunPos))
             {
-                if (tryTrunPos.x < 0 || tryTrunPos.x >= grid.Width || !grid.IsCellEmpty(tryTrunPos))
+                if (tryTrunPos.x < 0 || tryTrunPos.x >= grid.Width || !grid.IsCellEmpty(tryTrunPos))//左右退位
                 {
                     if (tryTrunPos.x < centerPos.x) centerPos += new Vector2Int(1, 0);
                     if (tryTrunPos.x > centerPos.x) centerPos += new Vector2Int(-1, 0);
                 }
-                if (tryTrunPos.y < centerPos.y)
+                if (tryTrunPos.y < centerPos.y)//上下退位
                 {
                     centerPos += new Vector2Int(0, 1);
 
-                    
-
+                    //到底部時觸發底部計時邏輯
                     isCellMoveToBottom = false;
                     movingTimer = 0;
                     finalCellMoveTimer = 0.8f;
@@ -621,7 +610,7 @@ public class CellCtrl : MonoBehaviour
                 TurnedGridPos.Add(newPos);
             }
         }
-
+        //合法 -> 旋轉
         if (canTurn)
         {
             MovingPiecesOffset = TurnedGridPos;
@@ -634,13 +623,13 @@ public class CellCtrl : MonoBehaviour
 
             secondRotation = false;
         }
-
+        //I_shape 獨立旋轉模式
         if (now_Shape == ShapePiece.I_shape)
         {
             rotationIndex++;
             if (rotationIndex > 3) rotationIndex = 0;
         }
-        Debug.Log(isCellMoveToBottom);
+        
         PredictFallingPiece();
 
     }
